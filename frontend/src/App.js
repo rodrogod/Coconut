@@ -45,10 +45,15 @@ function App() {
     setIsAuthenticated(false);
     setAuthToken(null);
   };
+  
+  // Estilo para ocultar el H1 cuando no está autenticado
+  const titleStyle = {
+    display: isAuthenticated ? 'block' : 'none'
+  };
 
   return (
     <div className="App">
-      <h1>VRP Application</h1>
+      <h1 style={titleStyle}>VRP Application</h1>
 
       {/* Conditionally render Login or main app content */}
       {isAuthenticated ? (
