@@ -12,6 +12,56 @@ const initialFormData = {
     is_available: true,
 };
 
+// Estilos reutilizables
+const baseInputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    fontSize: '14px',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px',
+    boxSizing: 'border-box',
+    marginBottom: '15px',
+    transition: 'border-color 0.2s ease'
+};
+
+const baseLabelStyle = {
+    display: 'block',
+    marginBottom: '5px',
+    fontWeight: '500',
+    fontSize: '14px',
+    color: '#333'
+};
+
+const primaryButtonStyle = {
+    backgroundColor: '#2A5A8C',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '10px 15px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'background-color 0.2s ease'
+};
+
+const secondaryButtonStyle = {
+    backgroundColor: '#f8f9fa',
+    color: '#2A5A8C',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px',
+    padding: '10px 15px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'background-color 0.2s ease'
+};
+
 function VehicleList() {
     const [vehicles, setVehicles] = useState([]);
     const [vehicleTypes, setVehicleTypes] = useState([]);
@@ -136,41 +186,145 @@ function VehicleList() {
     if (error) return <p style={{ color: 'red' }}>{error}</p>;
 
     return (
-        <div style={{ border: '1px solid #ccc', padding: '15px', marginTop: '20px' }}>
-            <h3>Vehicles</h3>
-            <button onClick={() => { setShowForm(!showForm); if (showForm) handleCancelEdit(); }} disabled={isSubmitting}>
-                {showForm && !isEditing ? 'Cancel' : 'Add New Vehicle'}
-            </button>
+        <div>
+            {!showForm && (
+                <button 
+                    onClick={() => { setShowForm(true); setIsEditing(false); setFormData(initialFormData); setSubmitError(null); }} 
+                    style={primaryButtonStyle} 
+                    disabled={isSubmitting}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Add New Vehicle
+                </button>
+            )}
 
-            {/* Add/Edit Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} style={{ marginTop: '10px', border: '1px dashed #ccc', padding: '10px' }}>
-                    <h4>{isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}</h4>
-                    <div>
-                        <label>Type*: </label>
-                        <select name="type" value={formData.type} onChange={handleInputChange} required disabled={isSubmitting}>
-                            <option value="">Select Type</option>
-                            {vehicleTypes.map(vt => <option key={vt.id} value={vt.id}>{vt.name} ({vt.max_weight_kg}kg/{vt.max_volume_m3}m³)</option>)}
-                        </select>
-                    </div>
-                    <div><label>License Plate*: <input type="text" name="license_plate" value={formData.license_plate} onChange={handleInputChange} required disabled={isSubmitting} /></label></div>
-                    <div><label>Make: <input type="text" name="make" value={formData.make} onChange={handleInputChange} disabled={isSubmitting} /></label></div>
-                    <div><label>Model: <input type="text" name="model" value={formData.model} onChange={handleInputChange} disabled={isSubmitting} /></label></div>
-                    <div><label>VIN: <input type="text" name="vin" value={formData.vin} onChange={handleInputChange} disabled={isSubmitting} /></label></div>
-                    <div><label>Odometer (km): <input type="number" step="0.1" name="current_odometer_km" value={formData.current_odometer_km} onChange={handleInputChange} disabled={isSubmitting} /></label></div>
-                    <div><label>Insurance Expiry: <input type="date" name="insurance_expiry" value={formData.insurance_expiry} onChange={handleInputChange} disabled={isSubmitting} /></label></div>
-                    <div><label>Available: <input type="checkbox" name="is_available" checked={formData.is_available} onChange={handleInputChange} disabled={isSubmitting} /></label></div>
+                <div style={{
+                    position: 'fixed', // O usar un modal real
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1100, // Asegurar que esté por encima de otros elementos
+                    padding: '20px'
+                }}>
+                    <form 
+                        onSubmit={handleSubmit} 
+                        style={{
+                            backgroundColor: 'white',
+                            padding: '30px',
+                            borderRadius: '8px',
+                            boxShadow: '0 5px 15px rgba(0,0,0,0.1)',
+                            width: '100%',
+                            maxWidth: '500px'
+                        }}
+                    >
+                        <h3 style={{ 
+                            marginTop: 0, 
+                            marginBottom: '25px', 
+                            color: '#2A5A8C', 
+                            fontSize: '20px', 
+                            fontWeight: '600' 
+                        }}>
+                            {isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}
+                        </h3>
 
-                    {submitError && <p style={{ color: 'red' }}>Error: {submitError}</p>}
-                    <button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? 'Saving...' : (isEditing ? 'Update Vehicle' : 'Add Vehicle')}
-                    </button>
-                    {isEditing && <button type="button" onClick={handleCancelEdit} style={{marginLeft: '10px'}} disabled={isSubmitting}>Cancel Edit</button>}
-                </form>
+                        {/* Grid Layout for Form Fields */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', // Responsive grid
+                            gap: '20px',
+                            marginBottom: '25px'
+                        }}>
+                            <div>
+                                <label style={baseLabelStyle}>Type*</label>
+                                <select name="type" value={formData.type} onChange={handleInputChange} required disabled={isSubmitting} style={baseInputStyle}>
+                                    <option value="">Select Type</option>
+                                    {vehicleTypes.map(vt => <option key={vt.id} value={vt.id}>{vt.name} ({vt.max_weight_kg}kg/{vt.max_volume_m3}m³)</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={baseLabelStyle}>License Plate*</label>
+                                <input type="text" name="license_plate" value={formData.license_plate} onChange={handleInputChange} required disabled={isSubmitting} style={baseInputStyle} placeholder="e.g., ABC-123" />
+                            </div>
+                            <div>
+                                <label style={baseLabelStyle}>Make</label>
+                                <input type="text" name="make" value={formData.make} onChange={handleInputChange} disabled={isSubmitting} style={baseInputStyle} placeholder="e.g., Ford" />
+                            </div>
+                            <div>
+                                <label style={baseLabelStyle}>Model</label>
+                                <input type="text" name="model" value={formData.model} onChange={handleInputChange} disabled={isSubmitting} style={baseInputStyle} placeholder="e.g., Transit" />
+                            </div>
+                            <div>
+                                <label style={baseLabelStyle}>VIN</label>
+                                <input type="text" name="vin" value={formData.vin} onChange={handleInputChange} disabled={isSubmitting} style={baseInputStyle} placeholder="Vehicle Identification Number" />
+                            </div>
+                            <div>
+                                <label style={baseLabelStyle}>Odometer (km)</label>
+                                <input type="number" step="0.1" name="current_odometer_km" value={formData.current_odometer_km} onChange={handleInputChange} disabled={isSubmitting} style={baseInputStyle} />
+                            </div>
+                            <div>
+                                <label style={baseLabelStyle}>Insurance Expiry</label>
+                                <input type="date" name="insurance_expiry" value={formData.insurance_expiry} onChange={handleInputChange} disabled={isSubmitting} style={baseInputStyle} />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gridColumn: 'span 1' /* Ocupa una columna */, marginTop: '10px' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="is_available" 
+                                    name="is_available" 
+                                    checked={formData.is_available} 
+                                    onChange={handleInputChange} 
+                                    disabled={isSubmitting} 
+                                    style={{ marginRight: '10px', width: 'auto' /* Reset width */, marginBottom: '0' /* Reset margin */ }} 
+                                />
+                                <label htmlFor="is_available" style={{ ...baseLabelStyle, marginBottom: '0' /* Reset margin */ }}>
+                                    Available for routes
+                                </label>
+                            </div>
+                        </div>
+
+                        {submitError && <p style={{ color: '#D32F2F', backgroundColor: '#ffebee', padding: '10px', borderRadius: '4px', marginBottom: '20px', fontSize: '14px' }}>Error: {submitError}</p>}
+                        
+                        {/* Form Actions */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button 
+                                type="button" 
+                                onClick={handleCancelEdit} 
+                                style={{...secondaryButtonStyle, ...(isSubmitting && {opacity: 0.7, cursor: 'not-allowed'})}}
+                                disabled={isSubmitting}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                style={{...primaryButtonStyle, ...(isSubmitting && {opacity: 0.7, cursor: 'not-allowed'})}}
+                                disabled={isSubmitting}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
+                                </svg>
+                                {isSubmitting ? 'Saving...' : (isEditing ? 'Update Vehicle' : 'Add Vehicle')}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             )}
 
             {/* Vehicle List */}
-            <table style={{ width: '100%', marginTop: '15px', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', marginTop: '20px', borderCollapse: 'collapse' }}>
                 <thead>
                     <tr>
                         <th style={tableHeaderStyle}>Plate</th>
@@ -190,8 +344,17 @@ function VehicleList() {
                             <td style={tableCellStyle}>{v.current_odometer_km?.toFixed(1)} km</td>
                             <td style={tableCellStyle}>{v.is_available ? 'Yes' : 'No'}</td>
                             <td style={tableCellStyle}>
-                                <button onClick={() => handleEditClick(v)} disabled={showForm && isEditing && editingId === v.id}>Edit</button>
-                                {/* <button onClick={() => handleDelete(v.id)} style={{marginLeft: '5px'}}>Delete</button> */}
+                                <button 
+                                    onClick={() => handleEditClick(v)} 
+                                    style={{...secondaryButtonStyle, padding: '5px 10px', fontSize: '12px'}} 
+                                    disabled={showForm && isEditing && editingId === v.id}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    Edit
+                                </button>
                             </td>
                         </tr>
                     ))}

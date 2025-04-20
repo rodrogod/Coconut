@@ -58,27 +58,16 @@ function Login({ onLoginSuccess }) { // Pass a callback for successful login
         }
     };
 
-    // Estilos para el cuerpo de la página - prevenir scroll
-    const bodyStyle = {
-        height: '100%',
-        overflow: 'hidden',
-        position: 'fixed',
-        width: '100%',
-        top: 0,
-        left: 0
-    };
-
-    // Estilos para el contenedor principal - centrado vertical y horizontal sin scroll
+    // Estilos para el contenedor principal - ASEGURAR CENTRADO VERTICAL Y HORIZONTAL
     const containerStyle = {
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh', // Usar height en lugar de minHeight
-        padding: '0',
-        margin: '0',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-        backgroundColor: '#f5f7fa' // Color de fondo suave
+        display: 'flex', // Habilitar Flexbox
+        justifyContent: 'center', // Centrar horizontalmente el contenido (la tarjeta)
+        alignItems: 'center', // Centrar verticalmente el contenido (la tarjeta)
+        minHeight: '100vh', // Ocupar al menos toda la altura de la ventana
+        width: '100vw', // Ocupar todo el ancho de la ventana
+        backgroundColor: '#f5f7fa', // Color de fondo
+        padding: '20px', // Espaciado interno opcional
+        boxSizing: 'border-box' // Incluir padding en el tamaño total
     };
 
     // Estilos para la tarjeta de login
@@ -114,7 +103,8 @@ function Login({ onLoginSuccess }) { // Pass a callback for successful login
         display: 'block',
         marginBottom: '8px',
         fontWeight: '500',
-        color: '#4a4a4a'
+        color: '#4a4a4a',
+        textAlign: 'center'
     };
 
     // Estilos para inputs
@@ -124,7 +114,8 @@ function Login({ onLoginSuccess }) { // Pass a callback for successful login
         fontSize: '16px',
         border: '1px solid #ddd',
         borderRadius: '4px',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        textAlign: 'center'
     };
 
     // Estilos para el botón
@@ -139,7 +130,8 @@ function Login({ onLoginSuccess }) { // Pass a callback for successful login
         fontWeight: '500',
         cursor: isLoading ? 'not-allowed' : 'pointer',
         marginTop: '10px',
-        opacity: isLoading ? 0.7 : 1
+        opacity: isLoading ? 0.7 : 1,
+        textAlign: 'center'
     };
 
     // Estilos para mensaje de error
@@ -150,39 +142,9 @@ function Login({ onLoginSuccess }) { // Pass a callback for successful login
         borderRadius: '4px',
         fontSize: '14px',
         marginBottom: '20px',
-        borderLeft: '4px solid #d32f2f'
+        borderLeft: '4px solid #d32f2f',
+        textAlign: 'center'
     };
-
-    // Aplicar estilos al body para prevenir scroll
-    React.useEffect(() => {
-        // Guardar los estilos originales
-        const originalStyle = {
-            overflow: document.body.style.overflow,
-            position: document.body.style.position,
-            width: document.body.style.width,
-            height: document.body.style.height,
-            top: document.body.style.top,
-            left: document.body.style.left
-        };
-
-        // Aplicar estilos para prevenir scroll
-        document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        document.body.style.height = '100%';
-        document.body.style.top = '0';
-        document.body.style.left = '0';
-
-        // Restaurar estilos originales al desmontar el componente
-        return () => {
-            document.body.style.overflow = originalStyle.overflow;
-            document.body.style.position = originalStyle.position;
-            document.body.style.width = originalStyle.width;
-            document.body.style.height = originalStyle.height;
-            document.body.style.top = originalStyle.top;
-            document.body.style.left = originalStyle.left;
-        };
-    }, []);
 
     return (
         <div style={containerStyle}>
