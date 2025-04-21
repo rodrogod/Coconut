@@ -57,7 +57,7 @@ function RoutePlanner() {
     const [depots, setDepots] = useState([]);
     const [selectedDepot, setSelectedDepot] = useState('');
     const [availableVehicles, setAvailableVehicles] = useState([]);
-    const [selectedVehicleIds, setSelectedVehicleIds] = useState(new Set());
+    const [selectedVehicleId, setSelectedVehicleId] = useState(null);
     const [pendingTasks, setPendingTasks] = useState([]);
     const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
     // Estado para depot favorito
@@ -139,15 +139,7 @@ function RoutePlanner() {
 
     // --- Handlers ---
     const handleVehicleSelection = (vehicleId) => {
-        setSelectedVehicleIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(vehicleId)) {
-                newSet.delete(vehicleId);
-            } else {
-                newSet.add(vehicleId);
-            }
-            return newSet;
-        });
+        setSelectedVehicleId(vehicleId);
     };
 
     const handleTaskSelection = (taskId) => {
@@ -259,33 +251,54 @@ function RoutePlanner() {
     };
 
     const handlePlanRoutes = async () => {
-        if (!selectedDepot || selectedVehicleIds.size === 0 || selectedTaskIds.size === 0) {
-            setError("Please select a depot, at least one vehicle, and at least one task.");
+        if (!selectedDepot) {
+            alert("Por favor, seleccione un depot.");
             return;
         }
+        if (selectedVehicleId === null) {
+            alert("Por favor, seleccione al menos un vehículo.");
+            return;
+        }
+        if (selectedTaskIds.size === 0) {
+            alert("Por favor, seleccione al menos una tarea.");
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setPlanResult(null);
 
         const payload = {
-            depot_id: selectedDepot,
-            vehicle_ids: Array.from(selectedVehicleIds),
+            depot_id: parseInt(selectedDepot),
+            vehicle_ids: [selectedVehicleId],
             task_ids: Array.from(selectedTaskIds),
             date: planDate,
         };
 
+        console.log("Planning payload:", payload);
+
         try {
-            console.log("Sending planning request:", payload);
             const response = await axios.post('/api/routes/plan/', payload);
-            console.log("Planning response:", response.data);
+            console.log("Planning result:", response.data);
             setPlanResult(response.data);
-            // Limpiar selecciones después de planificar exitosamente
-            setSelectedTaskIds(new Set());
+            alert("Rutas planificadas con éxito!");
         } catch (err) {
             console.error("Error planning routes:", err);
-            let errorMsg = "Failed to plan routes.";
+            let errorMsg = "Error al planificar las rutas.";
             if (err.response && err.response.data) {
-                errorMsg += ` Server responded with: ${JSON.stringify(err.response.data)}`;
+                const data = err.response.data;
+                if (typeof data === 'string') {
+                    errorMsg = data;
+                } else if (data.detail) {
+                    errorMsg = data.detail;
+                } else if (data.non_field_errors) {
+                    errorMsg = data.non_field_errors.join(', ');
+                } else {
+                    const fieldErrors = Object.entries(data)
+                        .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                        .join('; ');
+                    if (fieldErrors) errorMsg += ` Detalles: ${fieldErrors}`;
+                }
             }
             setError(errorMsg);
         } finally {
@@ -438,7 +451,7 @@ function RoutePlanner() {
                         <div className="vehicles-section" style={{marginBottom: '30px'}}>
                             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #E0E0E0', paddingBottom: '10px'}}>
                                 <h3 style={{margin: 0, color: '#2A5A8C'}}>Vehículos Disponibles</h3>
-                                <span style={{color: '#666', fontSize: '0.9rem'}}>Seleccionados: {selectedVehicleIds.size}</span>
+                                <span style={{color: '#666', fontSize: '0.9rem'}}>Seleccionados: {selectedVehicleId ? 1 : 0}</span>
                             </div>
                             
                             {availableVehicles.length === 0 ? (
@@ -448,15 +461,15 @@ function RoutePlanner() {
                                     {availableVehicles.map(vehicle => (
                                         <div 
                                             key={vehicle.id} 
-                                            className={`vehicle-card ${selectedVehicleIds.has(vehicle.id) ? 'selected' : ''}`}
+                                            className={`vehicle-card ${selectedVehicleId === vehicle.id ? 'selected' : ''}`}
                                             style={{
                                                 width: 'calc(50% - 10px)',
                                                 minWidth: '200px',
-                                                border: selectedVehicleIds.has(vehicle.id) ? '2px solid #4CAF50' : '1px solid #E0E0E0',
+                                                border: selectedVehicleId === vehicle.id ? '2px solid #4CAF50' : '1px solid #E0E0E0',
                                                 borderRadius: '6px',
                                                 padding: '10px',
                                                 cursor: 'pointer',
-                                                backgroundColor: selectedVehicleIds.has(vehicle.id) ? '#f0fff4' : 'white',
+                                                backgroundColor: selectedVehicleId === vehicle.id ? '#f0fff4' : 'white',
                                                 transition: 'all 0.2s'
                                             }}
                                             onClick={() => handleVehicleSelection(vehicle.id)}
@@ -667,7 +680,7 @@ function RoutePlanner() {
                                         <strong>Depósito:</strong> {selectedDepot ? depots.find(d => d.id === parseInt(selectedDepot))?.name || 'Ninguno' : 'Ninguno'}
                                     </li>
                                     <li style={{marginBottom: '8px'}}>
-                                        <strong>Vehículos:</strong> {selectedVehicleIds.size} seleccionados
+                                        <strong>Vehículo:</strong> {selectedVehicleId ? availableVehicles.find(v => v.id === selectedVehicleId)?.license_plate || 'Ninguno' : 'Ninguno'}
                                     </li>
                                     <li style={{marginBottom: '8px'}}>
                                         <strong>Tareas:</strong> {selectedTaskIds.size} seleccionadas
@@ -680,7 +693,7 @@ function RoutePlanner() {
 
                 <button 
                     onClick={handlePlanRoutes} 
-                    disabled={isLoading || !selectedDepot || selectedVehicleIds.size === 0 || selectedTaskIds.size === 0}
+                    disabled={isLoading || !selectedDepot || selectedVehicleId === null || selectedTaskIds.size === 0}
                                 className="btn btn-success"
                                 style={{
                                     backgroundColor: '#2A5A8C',
@@ -697,7 +710,7 @@ function RoutePlanner() {
                                     justifyContent: 'center',
                                     alignItems: 'center',
                                     gap: '10px',
-                                    opacity: (isLoading || !selectedDepot || selectedVehicleIds.size === 0 || selectedTaskIds.size === 0) ? 0.6 : 1
+                                    opacity: (isLoading || !selectedDepot || selectedVehicleId === null || selectedTaskIds.size === 0) ? 0.6 : 1
                                 }}
                             >
                                 {isLoading ? (

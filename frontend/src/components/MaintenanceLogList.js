@@ -52,7 +52,7 @@ const secondaryButtonStyle = {
     marginLeft: '10px'
 };
 
-function MaintenanceLogList() {
+function MaintenanceLogList({ searchTerm, vehicleFilter, statusFilter }) {
     const [logs, setLogs] = useState([]);
     const [vehicles, setVehicles] = useState([]); // For dropdown
     const [maintenanceTypes, setMaintenanceTypes] = useState([]); // For dropdown
@@ -62,6 +62,7 @@ function MaintenanceLogList() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState(null);
+    const [editingLog, setEditingLog] = useState(null);
 
     // Form state for adding new log
     const [newLogVehicle, setNewLogVehicle] = useState('');
@@ -91,9 +92,30 @@ function MaintenanceLogList() {
 
             // Fetch logs, potentially filtered
             let logUrl = '/api/maintenance-logs/';
-            if (selectedVehicleFilter) {
-                logUrl += `?vehicle=${selectedVehicleFilter}`;
+            
+            const params = new URLSearchParams();
+            
+            // Usar filtro de vehículo del componente padre, o del estado local si no existe
+            if (vehicleFilter) {
+                params.append('vehicle', vehicleFilter);
+            } else if (selectedVehicleFilter) {
+                params.append('vehicle', selectedVehicleFilter);
             }
+            
+            // Aplicar filtro de estado si existe
+            if (statusFilter) {
+                params.append('status', statusFilter);
+            }
+            
+            // Aplicar término de búsqueda si existe
+            if (searchTerm) {
+                params.append('search', searchTerm);
+            }
+            
+            if (params.toString()) {
+                logUrl += `?${params.toString()}`;
+            }
+            
             const logRes = await axios.get(logUrl);
             setLogs(logRes.data || []);
 
@@ -105,9 +127,17 @@ function MaintenanceLogList() {
         }
     };
 
+    // Utilizar los filtros externos cuando cambian
     useEffect(() => {
         fetchData();
-    }, [selectedVehicleFilter]); // Refetch logs when filter changes
+    }, [searchTerm, vehicleFilter, statusFilter]);
+
+    // También seguir usando el filtro local (para la experiencia de usuario en componente)
+    useEffect(() => {
+        if (!vehicleFilter) { // Solo si no hay un filtro externo
+            fetchData();
+        }
+    }, [selectedVehicleFilter]);
 
     const resetForm = () => {
         setNewLogVehicle('');
@@ -159,13 +189,18 @@ function MaintenanceLogList() {
 
 
         try {
-            await axios.post('/api/maintenance-logs/', payload);
+            if (editingLog) {
+                await axios.put(`/api/maintenance-logs/${editingLog.id}/`, payload);
+                setEditingLog(null);
+            } else {
+                await axios.post('/api/maintenance-logs/', payload);
+            }
             resetForm();
             setShowAddForm(false);
             fetchData(); // Refetch logs
         } catch (err) {
-            console.error("Error adding maintenance log:", err);
-            let errorMsg = "Failed to add log.";
+            console.error("Error saving maintenance log:", err);
+            let errorMsg = "Failed to save log.";
             if (err.response && err.response.data) {
                 errorMsg = JSON.stringify(err.response.data);
             }
@@ -175,6 +210,33 @@ function MaintenanceLogList() {
         }
     };
 
+    const handleEditClick = (log) => {
+        setEditingLog(log);
+        setNewLogVehicle(log.vehicle);
+        setNewLogType(log.maintenance_type);
+        setNewLogStatus(log.status);
+        setNewLogScheduledDate(log.scheduled_date || '');
+        setNewLogCompletionDate(log.completion_date || '');
+        setNewLogOdometer(log.odometer_at_maintenance || '');
+        setNewLogCost(log.cost || '');
+        setNewLogNotes(log.notes || '');
+        setNewLogUnavailableStart(log.unavailable_start_date || '');
+        setNewLogUnavailableEnd(log.unavailable_end_date || '');
+        setShowAddForm(true);
+        setSubmitError(null);
+    };
+
+    const handleStatusChange = async (logId, newStatus) => {
+        try {
+            await axios.patch(`/api/maintenance-logs/${logId}/`, {
+                status: newStatus
+            });
+            fetchData(); // Refetch logs to update the status
+        } catch (err) {
+            console.error("Error updating status:", err);
+            alert("Failed to update status. Please try again.");
+        }
+    };
 
     if (error && !isLoading) return <p style={{ color: 'red' }}>{error}</p>; // Show error only if not loading
 
@@ -202,7 +264,7 @@ function MaintenanceLogList() {
             {/* Botón "Add New Log Entry" */}
              {!showAddForm && (
                 <button 
-                    onClick={() => { setShowAddForm(true); resetForm(); }} 
+                    onClick={() => { setShowAddForm(true); setEditingLog(null); resetForm(); }} 
                     style={primaryButtonStyle}
                     disabled={isSubmitting}
                 >
@@ -242,17 +304,28 @@ function MaintenanceLogList() {
                             overflowY: 'auto'
                         }}
                     >
-                        <h3 style={{ 
-                            marginTop: 0, 
-                            marginBottom: '25px', 
-                            color: '#2A5A8C', 
-                            fontSize: '20px', 
-                            fontWeight: '600' 
-                        }}>
-                            Add New Log Entry
-                        </h3>
-
-                        {/* Grid Layout for Form */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h3 style={{ margin: 0, color: '#2A5A8C', fontSize: '20px', fontWeight: '600' }}>
+                                {editingLog ? 'Edit Maintenance Log' : 'Add New Maintenance Log'}
+                            </h3>
+                            <button 
+                                type="button" 
+                                onClick={() => { setShowAddForm(false); setEditingLog(null); }} 
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '24px',
+                                    lineHeight: '24px',
+                                    cursor: 'pointer',
+                                    color: '#777'
+                                }}
+                                disabled={isSubmitting}
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        
+                        {/* Grid Layout for Form Fields */}
                         <div style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', // Ajustar minmax
@@ -282,17 +355,17 @@ function MaintenanceLogList() {
                                     <option value="CANCELLED">Cancelled</option>
                                 </select>
                             </div>
-                             <div>
-                                <label htmlFor="newLogScheduledDate" style={baseLabelStyle}>Scheduled Date</label>
-                                <input id="newLogScheduledDate" type="date" value={newLogScheduledDate} onChange={e => setNewLogScheduledDate(e.target.value)} disabled={isSubmitting} style={baseInputStyle} />
+                            <div>
+                                <label htmlFor="newLogScheduledDate" style={baseLabelStyle}>Scheduled Date*</label>
+                                <input id="newLogScheduledDate" type="date" value={newLogScheduledDate} onChange={e => setNewLogScheduledDate(e.target.value)} required disabled={isSubmitting} style={baseInputStyle} />
                             </div>
-                             <div>
+                            <div>
                                 <label htmlFor="newLogCompletionDate" style={baseLabelStyle}>Completion Date</label>
                                 <input id="newLogCompletionDate" type="date" value={newLogCompletionDate} onChange={e => setNewLogCompletionDate(e.target.value)} disabled={isSubmitting} style={baseInputStyle} />
                             </div>
                             <div>
                                 <label htmlFor="newLogOdometer" style={baseLabelStyle}>Odometer (km)</label>
-                                <input id="newLogOdometer" type="number" step="0.1" value={newLogOdometer} onChange={e => setNewLogOdometer(e.target.value)} disabled={isSubmitting} style={baseInputStyle} placeholder="e.g., 12345.6" />
+                                <input id="newLogOdometer" type="number" value={newLogOdometer} onChange={e => setNewLogOdometer(e.target.value)} disabled={isSubmitting} style={baseInputStyle} placeholder="e.g., 12500" />
                             </div>
                             <div>
                                 <label htmlFor="newLogCost" style={baseLabelStyle}>Cost ($)</label>
@@ -315,10 +388,10 @@ function MaintenanceLogList() {
                         {submitError && <p style={{ color: '#D32F2F', backgroundColor: '#ffebee', padding: '10px', borderRadius: '4px', marginBottom: '20px', fontSize: '14px' }}>Error: {submitError}</p>}
                         
                         {/* Form Actions */}
-                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                             <button 
                                 type="button" 
-                                onClick={() => setShowAddForm(false)} 
+                                onClick={() => { setShowAddForm(false); setEditingLog(null); }} 
                                 style={{...secondaryButtonStyle, ...(isSubmitting && {opacity: 0.7, cursor: 'not-allowed'})}}
                                 disabled={isSubmitting}
                             >
@@ -334,57 +407,137 @@ function MaintenanceLogList() {
                                     <polyline points="17 21 17 13 7 13 7 21"></polyline>
                                     <polyline points="7 3 7 8 15 8"></polyline>
                                 </svg>
-                                {isSubmitting ? 'Saving...' : 'Save Log Entry'}
+                                {isSubmitting ? 'Saving...' : (editingLog ? 'Update Log' : 'Save Log')}
                             </button>
                         </div>
                     </form>
                 </div>
             )}
 
-            {/* Log List - Improved Styling */}
-            {isLoading ? <p style={{ marginTop: '20px' }}>Loading logs...</p> : (
-                <ul style={{ listStyle: 'none', paddingLeft: 0, marginTop: '20px' }}>
-                    {logs.length === 0 && <p>No maintenance logs found{selectedVehicleFilter ? ' for this vehicle' : ''}.</p>}
-                    {logs.map(log => (
-                        <li 
-                            key={log.id} 
-                            style={{
-                                border: '1px solid #e0e0e0',
-                                borderRadius: '6px',
-                                padding: '15px',
-                                marginBottom: '15px',
-                                backgroundColor: 'white'
-                            }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                <span style={{ fontWeight: '600', color: '#2A5A8C', fontSize: '16px' }}>
-                                    {log.maintenance_type_name} - {log.vehicle_plate}
-                                </span>
-                                <span style={{
-                                    padding: '4px 8px',
+            {/* Loading indicator */}
+            {isLoading && <p>Loading maintenance logs...</p>}
+
+            {/* Lista de registros de mantenimiento mejorada */}
+            <ul style={{ listStyle: 'none', padding: 0, marginTop: '20px' }}>
+                {logs.map(log => (
+                    <li 
+                        key={log.id} 
+                        style={{
+                            marginBottom: '15px',
+                            padding: '15px',
+                            borderRadius: '6px',
+                            backgroundColor: 'white',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                            border: '1px solid #eee'
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <span style={{ fontWeight: '600', color: '#2A5A8C', fontSize: '16px' }}>
+                                {log.maintenance_type_name} - {log.vehicle_plate}
+                            </span>
+                            <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                backgroundColor: log.status === 'COMPLETED' ? '#e8f5e9' : (log.status === 'IN_PROGRESS' ? '#e3f2fd' : '#fff3e0'),
+                                color: log.status === 'COMPLETED' ? '#388e3c' : (log.status === 'IN_PROGRESS' ? '#1976d2' : '#ef6c00'),
+                                border: `1px solid ${log.status === 'COMPLETED' ? '#c8e6c9' : (log.status === 'IN_PROGRESS' ? '#bbdefb' : '#ffe0b2')}`
+                            }}>
+                                {log.status_display}
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#555', lineHeight: '1.6' }}>
+                            {log.scheduled_date && <div>Scheduled: {log.scheduled_date}</div>}
+                            {log.completion_date && <div>Completed: {log.completion_date}</div>}
+                            {log.odometer_at_maintenance && <div>Odometer: {log.odometer_at_maintenance} km</div>}
+                            {log.cost && <div>Cost: ${log.cost}</div>}
+                            {log.unavailable_start_date && <div>Unavailable: {log.unavailable_start_date} to {log.unavailable_end_date || '?'}</div>}
+                            {log.notes && <div style={{ marginTop: '5px', fontStyle: 'italic' }}>{log.notes}</div>}
+                        </div>
+                        
+                        {/* Acciones para cada registro */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px', gap: '10px' }}>
+                            {/* Botones de estado */}
+                            <div style={{ marginRight: 'auto', display: 'flex', gap: '5px' }}>
+                                {log.status !== 'SCHEDULED' && (
+                                    <button 
+                                        onClick={() => handleStatusChange(log.id, 'SCHEDULED')}
+                                        style={{
+                                            border: '1px solid #ff9800',
+                                            color: '#ff9800',
+                                            background: 'white',
+                                            borderRadius: '4px',
+                                            padding: '4px 8px',
+                                            fontSize: '12px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Set Scheduled
+                                    </button>
+                                )}
+                                {log.status !== 'IN_PROGRESS' && (
+                                    <button 
+                                        onClick={() => handleStatusChange(log.id, 'IN_PROGRESS')}
+                                        style={{
+                                            border: '1px solid #2196f3',
+                                            color: '#2196f3',
+                                            background: 'white',
+                                            borderRadius: '4px',
+                                            padding: '4px 8px',
+                                            fontSize: '12px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Set In Progress
+                                    </button>
+                                )}
+                                {log.status !== 'COMPLETED' && (
+                                    <button 
+                                        onClick={() => handleStatusChange(log.id, 'COMPLETED')}
+                                        style={{
+                                            border: '1px solid #4caf50',
+                                            color: '#4caf50',
+                                            background: 'white',
+                                            borderRadius: '4px',
+                                            padding: '4px 8px',
+                                            fontSize: '12px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Set Completed
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {/* Botón de edición */}
+                            <button 
+                                onClick={() => handleEditClick(log)}
+                                style={{
+                                    backgroundColor: '#f8f9fa',
+                                    color: '#2A5A8C',
+                                    border: '1px solid #e0e0e0',
                                     borderRadius: '4px',
+                                    padding: '5px 10px',
                                     fontSize: '12px',
-                                    fontWeight: '500',
-                                    backgroundColor: log.status === 'COMPLETED' ? '#e8f5e9' : (log.status === 'IN_PROGRESS' ? '#e3f2fd' : '#fff3e0'),
-                                    color: log.status === 'COMPLETED' ? '#388e3c' : (log.status === 'IN_PROGRESS' ? '#1976d2' : '#ef6c00'),
-                                    border: `1px solid ${log.status === 'COMPLETED' ? '#c8e6c9' : (log.status === 'IN_PROGRESS' ? '#bbdefb' : '#ffe0b2')}`
-                                }}>
-                                    {log.status_display}
-                                </span>
-                            </div>
-                            <div style={{ fontSize: '14px', color: '#555', lineHeight: '1.6' }}>
-                                {log.scheduled_date && <div>Scheduled: {log.scheduled_date}</div>}
-                                {log.completion_date && <div>Completed: {log.completion_date}</div>}
-                                {log.odometer_at_maintenance && <div>Odometer: {log.odometer_at_maintenance} km</div>}
-                                {log.cost && <div>Cost: ${log.cost}</div>}
-                                {log.unavailable_start_date && <div>Unavailable: {log.unavailable_start_date} to {log.unavailable_end_date || '?'}</div>}
-                            </div>
-                            {log.notes && <p style={{ marginTop: '10px', fontSize: '14px', color: '#333', fontStyle: 'italic', backgroundColor: '#f9f9f9', padding: '8px', borderRadius: '4px' }}>Notes: {log.notes}</p>}
-                            {/* TODO: Add Edit/Delete buttons later */}
-                        </li>
-                    ))}
-                </ul>
-            )}
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                }}
+                                disabled={isSubmitting || showAddForm}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                Edit
+                            </button>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+            {!isLoading && logs.length === 0 && <p>No maintenance logs found.</p>}
         </div>
     );
 }

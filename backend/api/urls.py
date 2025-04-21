@@ -19,6 +19,7 @@ urlpatterns = [
     path('routes/plan/', views.plan_routes_view, name='plan-routes'),
     path('locations/import/', views.import_locations_csv, name='import-locations-csv'),
     path('routes/<int:pk>/update_status/', views.update_route_status_view, name='update-route-status'),
+    path('maintenance/stats/', views.maintenance_stats_view, name='maintenance-stats'),
     # Then include the router URLs
     path('', include(router.urls)),
 ]

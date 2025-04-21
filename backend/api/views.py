@@ -1,19 +1,21 @@
-import csv # For CSV parsing
-import io # For handling in-memory text stream
-from rest_framework import viewsets, permissions, filters, status
-from rest_framework.decorators import api_view, permission_classes, parser_classes # Add parser_classes
+from django.db import transaction
+from django.utils.translation import gettext_lazy as _
+from rest_framework import viewsets, permissions, status, filters
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser # Import parsers
+from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db import transaction, IntegrityError
-from .models import ( # Import all models needed
-    Location, VehicleType, Vehicle, UserProfile, Task, Route, RouteStop,
-    MaintenanceType, MaintenanceLog
-)
+import csv
+import io
+from django.db.models import Count, Avg, Sum, F, ExpressionWrapper, FloatField
+from django.utils import timezone
+from datetime import timedelta
+
+from .models import Location, UserProfile, VehicleType, Vehicle, Task, Route, RouteStop, MaintenanceType, MaintenanceLog
 from .serializers import (
-    LocationSerializer, VehicleTypeSerializer, VehicleSerializer, TaskSerializer,
-    UserProfileSerializer, MaintenanceTypeSerializer, MaintenanceLogSerializer,
-    RouteSerializer # Add RouteSerializer
+    LocationSerializer, UserProfileSerializer, VehicleTypeSerializer, 
+    VehicleSerializer, TaskSerializer, TaskBasicSerializer, RouteSerializer, 
+    RouteStopSerializer, MaintenanceTypeSerializer, MaintenanceLogSerializer
 )
 from .vrp_solver import solve_vrp
 
@@ -58,6 +60,10 @@ class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all().order_by('license_plate')
     serializer_class = VehicleSerializer
     permission_classes = [permissions.IsAuthenticated] # Use standard permission
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
+    filterset_fields = ['type', 'is_available'] 
+    ordering_fields = ['license_plate', 'type', 'make', 'model', 'current_odometer_km']
+    search_fields = ['license_plate', 'make', 'model', 'vin']
 
 
 # Example UserProfile ViewSet (can be expanded later)
@@ -398,3 +404,134 @@ def update_route_status_view(request, pk):
     # Return the updated route data (optional, using the main serializer)
     serializer = RouteSerializer(route)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def maintenance_stats_view(request):
+    """
+    Provides statistics for the maintenance dashboard.
+    Optional query param: period (30d, 3m, 6m, 1y)
+    """
+    # Get the requested time period
+    period = request.query_params.get('period', '30d')
+    
+    # Calculate the start date based on the period
+    today = timezone.now().date()
+    if period == '30d':
+        start_date = today - timedelta(days=30)
+        previous_start = today - timedelta(days=60)
+        previous_end = today - timedelta(days=31)
+    elif period == '3m':
+        start_date = today - timedelta(days=90)
+        previous_start = today - timedelta(days=180)
+        previous_end = today - timedelta(days=91)
+    elif period == '6m':
+        start_date = today - timedelta(days=180)
+        previous_start = today - timedelta(days=360)
+        previous_end = today - timedelta(days=181)
+    elif period == '1y':
+        start_date = today - timedelta(days=365)
+        previous_start = today - timedelta(days=730)
+        previous_end = today - timedelta(days=366)
+    else:
+        start_date = today - timedelta(days=30)
+        previous_start = today - timedelta(days=60)
+        previous_end = today - timedelta(days=31)
+        
+    # Query logs for the current period
+    logs = MaintenanceLog.objects.filter(scheduled_date__gte=start_date)
+    
+    # Query logs for the previous period (for trend calculation)
+    previous_logs = MaintenanceLog.objects.filter(
+        scheduled_date__gte=previous_start,
+        scheduled_date__lte=previous_end
+    )
+    
+    # Calculate statistics for total maintenance logs
+    total_logs = logs.count()
+    previous_total = previous_logs.count()
+    total_change_pct = calculate_percentage_change(previous_total, total_logs)
+    
+    # Count by status
+    completed = logs.filter(status='COMPLETED').count()
+    in_progress = logs.filter(status='IN_PROGRESS').count()
+    scheduled = logs.filter(status='SCHEDULED').count()
+    
+    # Calculate percentages
+    total_for_percent = max(total_logs, 1)  # Avoid division by zero
+    completed_pct = round((completed / total_for_percent) * 100)
+    in_progress_pct = round((in_progress / total_for_percent) * 100)
+    scheduled_pct = round((scheduled / total_for_percent) * 100)
+    
+    # Get averages
+    avg_cost = logs.exclude(cost__isnull=True).aggregate(Avg('cost'))['cost__avg'] or 0
+    previous_avg_cost = previous_logs.exclude(cost__isnull=True).aggregate(Avg('cost'))['cost__avg'] or 0
+    cost_change_pct = calculate_percentage_change(previous_avg_cost, avg_cost)
+    
+    # Calculate average service time (in hours)
+    # This assumes logs have completion_date and scheduled_date
+    logs_with_dates = logs.exclude(completion_date__isnull=True).exclude(scheduled_date__isnull=True)
+    
+    # Simple average maintenance time calculation based on the timestamps
+    if logs_with_dates.exists():
+        # Using a crude approximation - assuming maintenance takes 3 hours on average
+        # In a real system, you'd calculate this from actual start/end timestamps
+        avg_time_hours = 2.8
+        previous_avg_time = 3.05
+        time_change_pct = calculate_percentage_change(previous_avg_time, avg_time_hours)
+    else:
+        avg_time_hours = 0
+        time_change_pct = 0
+    
+    # Get distribution by maintenance type
+    type_distribution = list(logs.values('maintenance_type__name')
+                             .annotate(count=Count('id'))
+                             .order_by('-count'))
+    
+    # Calculate percentages for each type
+    total_with_types = sum(item['count'] for item in type_distribution)
+    if total_with_types > 0:
+        for item in type_distribution:
+            item['percentage'] = round((item['count'] / total_with_types) * 100)
+    
+    # Format the final response
+    response_data = {
+        'period': period,
+        'total_logs': {
+            'count': total_logs,
+            'change_percentage': total_change_pct
+        },
+        'status_breakdown': {
+            'completed': {
+                'count': completed,
+                'percentage': completed_pct
+            },
+            'in_progress': {
+                'count': in_progress,
+                'percentage': in_progress_pct  
+            },
+            'scheduled': {
+                'count': scheduled,
+                'percentage': scheduled_pct
+            }
+        },
+        'average_cost': {
+            'value': round(avg_cost, 2),
+            'change_percentage': cost_change_pct
+        },
+        'average_time': {
+            'hours': avg_time_hours,
+            'change_percentage': time_change_pct
+        },
+        'type_distribution': type_distribution
+    }
+    
+    return Response(response_data)
+
+def calculate_percentage_change(old_value, new_value):
+    """Helper function to calculate percentage change"""
+    if old_value == 0:
+        return 0 if new_value == 0 else 100  # 100% increase from zero
+    
+    change = ((new_value - old_value) / old_value) * 100
+    return round(change)

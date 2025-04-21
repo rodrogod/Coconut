@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     # 'allauth.socialaccount',
     # 'dj_rest_auth.registration', # Required for registration endpoints
     'corsheaders',              # Added for CORS handling
+    'django_filters',           # Added for filtering support
 ]
 
 MIDDLEWARE = [
@@ -154,6 +155,11 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         # By default, require authentication for API access
         'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ]
     # Add pagination, filtering defaults here if desired later
 }

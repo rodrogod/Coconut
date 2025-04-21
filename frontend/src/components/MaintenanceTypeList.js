@@ -52,6 +52,19 @@ const secondaryButtonStyle = {
     marginLeft: '10px' // Add margin if needed next to primary
 };
 
+const iconButtonStyle = {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#555',
+    padding: '5px',
+    fontSize: '14px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    marginLeft: '8px',
+    transition: 'color 0.2s ease'
+};
+
 function MaintenanceTypeList() {
     const [types, setTypes] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +76,8 @@ function MaintenanceTypeList() {
     const [newTypeIntervalDays, setNewTypeIntervalDays] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState(null);
+    const [editingType, setEditingType] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
     const fetchTypes = async () => {
         setIsLoading(true);
@@ -95,7 +110,12 @@ function MaintenanceTypeList() {
         };
 
         try {
-            await axios.post('/api/maintenance-types/', payload);
+            if (editingType) {
+                await axios.put(`/api/maintenance-types/${editingType.id}/`, payload);
+                setEditingType(null);
+            } else {
+                await axios.post('/api/maintenance-types/', payload);
+            }
             // Reset form and hide
             setNewTypeName('');
             setNewTypeDescription('');
@@ -105,13 +125,45 @@ function MaintenanceTypeList() {
             // Refetch types to show the new one
             fetchTypes();
         } catch (err) {
-            console.error("Error adding maintenance type:", err);
-            let errorMsg = "Failed to add type.";
+            console.error("Error saving maintenance type:", err);
+            let errorMsg = "Failed to save type.";
             if (err.response && err.response.data) {
                 errorMsg = JSON.stringify(err.response.data); // Show raw error data
             }
             setSubmitError(errorMsg);
         } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleEditClick = (type) => {
+        setEditingType(type);
+        setNewTypeName(type.name);
+        setNewTypeDescription(type.description || '');
+        setNewTypeIntervalKm(type.interval_km || '');
+        setNewTypeIntervalDays(type.interval_days || '');
+        setShowAddForm(true);
+        setSubmitError(null);
+    };
+
+    const handleDeleteClick = (typeId) => {
+        setShowDeleteConfirm(typeId);
+    };
+
+    const handleDeleteConfirm = async (typeId) => {
+        setIsSubmitting(true);
+        try {
+            await axios.delete(`/api/maintenance-types/${typeId}/`);
+            fetchTypes();
+        } catch (err) {
+            console.error("Error deleting maintenance type:", err);
+            let errorMsg = "Failed to delete type.";
+            if (err.response && err.response.data) {
+                errorMsg = JSON.stringify(err.response.data);
+            }
+            alert(`Error: ${errorMsg}`);
+        } finally {
+            setShowDeleteConfirm(null);
             setIsSubmitting(false);
         }
     };
@@ -124,7 +176,7 @@ function MaintenanceTypeList() {
             {/* Botón Add New Type estilizado */}
             {!showAddForm && (
                  <button 
-                    onClick={() => { setShowAddForm(true); setSubmitError(null); }} 
+                    onClick={() => { setShowAddForm(true); setEditingType(null); setSubmitError(null); }} 
                     style={primaryButtonStyle}
                     disabled={isSubmitting}
                 >
@@ -149,7 +201,7 @@ function MaintenanceTypeList() {
                     }}
                 >
                     <h4 style={{ marginTop: 0, marginBottom: '20px', color: '#2A5A8C' }}>
-                        Add New Maintenance Type
+                        {editingType ? 'Edit Maintenance Type' : 'Add New Maintenance Type'}
                     </h4>
                     
                     {/* Grid Layout for Form */}
@@ -184,7 +236,7 @@ function MaintenanceTypeList() {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                         <button 
                             type="button" 
-                            onClick={() => setShowAddForm(false)} 
+                            onClick={() => { setShowAddForm(false); setEditingType(null); }} 
                             style={{...secondaryButtonStyle, ...(isSubmitting && {opacity: 0.7, cursor: 'not-allowed'})}}
                             disabled={isSubmitting}
                         >
@@ -200,23 +252,96 @@ function MaintenanceTypeList() {
                                 <polyline points="17 21 17 13 7 13 7 21"></polyline>
                                 <polyline points="7 3 7 8 15 8"></polyline>
                             </svg>
-                            {isSubmitting ? 'Saving...' : 'Save Type'}
+                            {isSubmitting ? 'Saving...' : (editingType ? 'Update Type' : 'Save Type')}
                         </button>
                     </div>
                 </form>
             )}
 
-            {/* Lista de Tipos (estilos básicos) */}
+            {/* Lista de Tipos mejorada con botones de edición y eliminación */}
             <ul style={{ listStyle: 'none', paddingLeft: 0, marginTop: '20px' }}>
                 {types.map(type => (
-                    <li key={type.id} style={{ borderBottom: '1px solid #eee', padding: '5px 0' }}>
-                        <strong>{type.name}</strong>
-                        {type.description && <p style={{ margin: '2px 0', fontSize: '0.9em' }}>{type.description}</p>}
-                        <p style={{ margin: '2px 0', fontSize: '0.8em', color: '#555' }}>
-                            Interval: {type.interval_km ? `${type.interval_km} km` : ''} {type.interval_km && type.interval_days ? ' / ' : ''} {type.interval_days ? `${type.interval_days} days` : ''}
-                            {!type.interval_km && !type.interval_days ? 'Not specified' : ''}
-                        </p>
-                        {/* TODO: Add Edit/Delete buttons later */}
+                    <li key={type.id} style={{ 
+                        borderBottom: '1px solid #eee', 
+                        padding: '15px 0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start'
+                    }}>
+                        <div>
+                            <strong>{type.name}</strong>
+                            {type.description && <p style={{ margin: '2px 0', fontSize: '0.9em', color: '#555' }}>{type.description}</p>}
+                            <p style={{ margin: '2px 0', fontSize: '0.8em', color: '#555' }}>
+                                Interval: {type.interval_km ? `${type.interval_km} km` : ''} {type.interval_km && type.interval_days ? ' / ' : ''} {type.interval_days ? `${type.interval_days} days` : ''}
+                                {!type.interval_km && !type.interval_days ? 'Not specified' : ''}
+                            </p>
+                        </div>
+                        <div>
+                            <button 
+                                onClick={() => handleEditClick(type)} 
+                                style={iconButtonStyle}
+                                title="Edit"
+                                disabled={isSubmitting || showAddForm}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteClick(type.id)} 
+                                style={{...iconButtonStyle, color: '#e53935'}}
+                                title="Delete"
+                                disabled={isSubmitting || showAddForm}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                            </button>
+
+                            {/* Confirmación de eliminación */}
+                            {showDeleteConfirm === type.id && (
+                                <div style={{
+                                    position: 'absolute',
+                                    zIndex: 100,
+                                    background: 'white',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    padding: '10px',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                    marginTop: '5px'
+                                }}>
+                                    <p style={{margin: '0 0 10px', fontSize: '14px'}}>¿Está seguro de eliminar este tipo?</p>
+                                    <div style={{display: 'flex', justifyContent: 'flex-end', gap: '5px'}}>
+                                        <button 
+                                            onClick={() => setShowDeleteConfirm(null)} 
+                                            style={{...secondaryButtonStyle, fontSize: '12px', padding: '5px 10px'}}
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteConfirm(type.id)} 
+                                            style={{
+                                                background: '#e53935',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                padding: '5px 10px',
+                                                fontSize: '12px',
+                                                cursor: 'pointer'
+                                            }}
+                                            disabled={isSubmitting}
+                                        >
+                                            Eliminar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </li>
                 ))}
             </ul>
